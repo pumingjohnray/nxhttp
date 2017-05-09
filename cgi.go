@@ -34,7 +34,7 @@ func (self *CgiProcessor) Process(ctx *NxContext) {
 
 	hp := strings.Split(r.Host, ":")
 	env = append(env, fmt.Sprintf("SERVER_NAME=%s", hp[0]))
-	if len(hp) > 0 {
+	if len(hp) > 1 {
 		env = append(env, fmt.Sprintf("SERVER_PORT=%s", hp[1]))
 	} else {
 		env = append(env, fmt.Sprintf("SERVER_PORT=80"))
@@ -115,56 +115,58 @@ func (self *CgiProcessor) Process(ctx *NxContext) {
 	go func() {
 		defer stdout.Close()
 
-		buf := make([]byte, 1024)
+		buf := make([]byte, 512)
 		eoh, _ := regexp.Compile(`\r?\n\r?\n`)
 
 		isheader := true
 		status := 200
 		hdr := make([]byte, 0)
 
-		for {
+		for stop := false; !stop; {
 			n, e := stdout.Read(buf)
 			if e != nil {
-				break
+				stop = true
 			}
 
-			if isheader {
-				if idx := eoh.FindIndex(buf); idx != nil {
-					hdr = append(hdr, buf[:idx[0]]...)
-					isheader = false
+			if n > 0 {
+				if isheader {
+					if idx := eoh.FindIndex(buf); idx != nil {
+						hdr = append(hdr, buf[:idx[0]]...)
+						isheader = false
 
-					for i, s := range strings.Split(string(hdr), "\n") {
-						// headers
-						if s[len(s)-1] == '\r' {
-							s = s[:len(s)-1]
-						}
-						p := strings.SplitN(s, ":", 2)
-						if len(p) > 1 {
-							name := strings.Trim(p[0], " ")
-							val := strings.Trim(p[1], " ")
-							if name == "Status" {
-								if x, err := strconv.Atoi(val); err == nil {
-									status = x
+						for i, s := range strings.Split(string(hdr), "\n") {
+							// headers
+							if s[len(s)-1] == '\r' {
+								s = s[:len(s)-1]
+							}
+							p := strings.SplitN(s, ":", 2)
+							if len(p) > 1 {
+								name := strings.Trim(p[0], " ")
+								val := strings.Trim(p[1], " ")
+								if name == "Status" {
+									if x, err := strconv.Atoi(val); err == nil {
+										status = x
+									}
+								} else {
+									w.Header().Set(name, val)
 								}
-							} else {
-								w.Header().Set(name, val)
-							}
-						} else if i == 0 {
-							// extract status
-							r := regexp.MustCompile(`(\d\d\d)`)
-							if t := r.FindAllString(s, -1); len(t) > 0 {
-								x, _ := strconv.ParseInt(t[0], 10, 16)
-								status = int(x)
+							} else if i == 0 {
+								// extract status
+								r := regexp.MustCompile(`(\d\d\d)`)
+								if t := r.FindAllString(s, -1); len(t) > 0 {
+									x, _ := strconv.ParseInt(t[0], 10, 16)
+									status = int(x)
+								}
 							}
 						}
+						w.WriteHeader(status)
+						w.Write(buf[idx[1]:n])
+					} else {
+						hdr = append(hdr, buf[:n]...)
 					}
-					w.WriteHeader(status)
-					w.Write(buf[idx[1]:n])
 				} else {
-					hdr = append(hdr, buf[:n]...)
+					w.Write(buf[:n])
 				}
-			} else {
-				w.Write(buf[:n])
 			}
 		}
 	}()
@@ -176,6 +178,9 @@ func (self *CgiProcessor) Process(ctx *NxContext) {
 		for {
 			n, e := stderr.Read(buf)
 			if e != nil {
+				if n > 0 {
+					log.Print(string(buf[:n]))
+				}
 				break
 			} else {
 				log.Print(string(buf[:n]))
