@@ -102,11 +102,7 @@ func (self *CgiProcessor) Process(ctx *NxContext) {
 				}
 				break
 			} else {
-				if n == 512 {
-					stdin.Write(buf)
-				} else {
-					stdin.Write(buf[:n])
-				}
+				stdin.Write(buf[:n])
 			}
 		}
 	}()
@@ -174,6 +170,7 @@ func (self *CgiProcessor) Process(ctx *NxContext) {
 	// stderr piping routine
 	go func() {
 		defer stderr.Close()
+
 		buf := make([]byte, 512)
 		for {
 			n, e := stderr.Read(buf)

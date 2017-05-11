@@ -110,8 +110,6 @@ func (self *DefaultEntry) PutData(key string, val interface{}) Entry {
 
 func (self *DefaultEntry) Exec(w http.ResponseWriter, r *http.Request, params []string) {
 	if self.proc != nil {
-		r.ParseForm()
-
 		ctx := &NxContext{
 			res:      w,
 			req:      r,
@@ -247,7 +245,7 @@ func (self NxHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	// match regexp patterns
+	// match entry & execute
 	var (
 		en   Entry
 		args []string
