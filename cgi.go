@@ -57,8 +57,6 @@ func (self *CgiProcessor) Process(ctx *NxContext) {
 		args = append(args, v)
 	}
 
-	log.Print("[CGI] ", self.bin, " ", args)
-
 	var cmd *exec.Cmd
 	if self.GetTimeout() > 0 {
 		ctx, cancel := context.WithTimeout(r.Context(), time.Duration(self.GetTimeout())*time.Millisecond)
