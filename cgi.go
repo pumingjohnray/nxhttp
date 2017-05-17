@@ -42,7 +42,7 @@ func (self *CgiProcessor) Process(ctx *NxContext) {
 
 	for k, vs := range r.Header {
 		for _, s := range vs {
-			env = append(env, fmt.Sprintf("%s=%s", strings.Replace(strings.ToUpper(k), "-", "_", -1), s))
+			env = append(env, fmt.Sprintf("HTTP_%s=%s", strings.Replace(strings.ToUpper(k), "-", "_", -1), s))
 		}
 	}
 

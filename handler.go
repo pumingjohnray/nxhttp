@@ -138,8 +138,8 @@ func (self *RegexpEntry) Match(path string) []string {
 	if len(ss) > 0 {
 		params := make([]string, 0)
 		for _, s := range ss {
-			if len(s) == 2 {
-				params = append(params, s[1])
+			if len(s) > 1 {
+				params = append(params, s[1:]...)
 			}
 		}
 		return params
