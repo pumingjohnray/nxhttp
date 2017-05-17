@@ -31,6 +31,7 @@ func (self *CgiProcessor) Process(ctx *NxContext) {
 	env = append(env, fmt.Sprintf("PATH_INFO=%s", r.URL.Path))
 	env = append(env, fmt.Sprintf("REQUEST_METHOD=%s", r.Method))
 	env = append(env, fmt.Sprintf("QUERY_STRING=%s", r.URL.RawQuery))
+	env = append(env, fmt.Sprintf("CONTENT_LENGTH=%d", r.ContentLength))
 
 	hp := strings.Split(r.Host, ":")
 	env = append(env, fmt.Sprintf("SERVER_NAME=%s", hp[0]))
@@ -42,7 +43,12 @@ func (self *CgiProcessor) Process(ctx *NxContext) {
 
 	for k, vs := range r.Header {
 		for _, s := range vs {
-			env = append(env, fmt.Sprintf("HTTP_%s=%s", strings.Replace(strings.ToUpper(k), "-", "_", -1), s))
+			name := strings.Replace(strings.ToUpper(k), "-", "_", -1)
+			env = append(env, fmt.Sprintf("HTTP_%s=%s", name, s))
+			//switch name {
+			//case "CONTENT_TYPE":
+			//	env = append(env, fmt.Sprintf("%s=%s", name, s))
+			//}
 		}
 	}
 
