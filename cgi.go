@@ -45,10 +45,6 @@ func (self *CgiProcessor) Process(ctx *NxContext) {
 		for _, s := range vs {
 			name := strings.Replace(strings.ToUpper(k), "-", "_", -1)
 			env = append(env, fmt.Sprintf("HTTP_%s=%s", name, s))
-			//switch name {
-			//case "CONTENT_TYPE":
-			//	env = append(env, fmt.Sprintf("%s=%s", name, s))
-			//}
 		}
 	}
 
@@ -61,6 +57,10 @@ func (self *CgiProcessor) Process(ctx *NxContext) {
 	}
 	for _, v := range ctx.UrlParams() {
 		args = append(args, v)
+	}
+
+	if ctx.IsDebug() {
+		fmt.Println("[CGI] ", self.bin, args)
 	}
 
 	var cmd *exec.Cmd

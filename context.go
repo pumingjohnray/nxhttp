@@ -16,6 +16,7 @@ type NxContext struct {
 	datakeys []string
 	cproc    NxProcessor // current proc
 	stopped  bool        // if stopped proc chainning
+	debug    bool
 }
 
 func (self *NxContext) Req() *http.Request {
@@ -74,6 +75,15 @@ func (self *NxContext) FormValueBool(name string, failsafe bool) bool {
 			return b
 		}
 	}
+}
+
+func (self *NxContext) SetDebug(b bool) *NxContext {
+	self.debug = b
+	return self
+}
+
+func (self *NxContext) IsDebug() bool {
+	return self.debug
 }
 
 func (self *NxContext) PutData(k string, v interface{}) *NxContext {

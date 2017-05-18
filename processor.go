@@ -8,11 +8,20 @@ import (
 
 type NxProcessor interface {
 	Name() string
+
+	// processor timeout
 	GetTimeout() int
 	SetTimeout(int) NxProcessor
+
+	// main entry
 	Process(*NxContext)
+
+	// next chained processor
 	getnext() NxProcessor
+
+	// add next processor
 	Then(NxProcessor) NxProcessor
+
 	Close()
 }
 
