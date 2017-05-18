@@ -44,6 +44,7 @@ func (self *CgiProcessor) Process(ctx *NxContext) {
 	for k, vs := range r.Header {
 		for _, s := range vs {
 			name := strings.Replace(strings.ToUpper(k), "-", "_", -1)
+			env = append(env, fmt.Sprintf("%s=%s", name, s))
 			env = append(env, fmt.Sprintf("HTTP_%s=%s", name, s))
 		}
 	}
