@@ -125,11 +125,14 @@ func (self *DbTx) Process(ctx *NxContext) {
 		log.Print(e)
 		ctx.End(http.StatusInternalServerError)
 	} else {
-		defer tx.Rollback()
+		defer func() {
+			if self.commit {
+				tx.Commit()
+			} else {
+				tx.Rollback()
+			}
+		}()
 		ctx.PutData("_dbtx", tx).RunNext()
-		if self.commit {
-			tx.Commit()
-		}
 	}
 }
 
