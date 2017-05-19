@@ -19,10 +19,10 @@ type WebsocketCallback struct {
 }
 
 type WebsocketClient struct {
-	proc *WSProcessor
+	ctx  *NxContext
+	proc *WebsocketProcessor
 	conn *websocket.Conn
 	send chan []byte
-	data map[string]interface{}
 }
 
 func (self *WebsocketClient) Conn() *websocket.Conn {
@@ -30,6 +30,9 @@ func (self *WebsocketClient) Conn() *websocket.Conn {
 }
 
 func (self *WebsocketClient) Send(msg []byte) {
+	if self.IsDebug() {
+		fmt.Println("[ws-send]", msg)
+	}
 	self.send <- msg
 }
 
@@ -37,11 +40,77 @@ func (self *WebsocketClient) Broadcast(msg []byte) {
 	self.proc.broadcast(msg)
 }
 
-func (self *WebsocketClient) Close() {
-	self.proc.remove(self)
-	self.data = make(map[string]interface{})
+func (self *WebsocketClient) PutData(key string, val interface{}) {
+	self.ctx.PutData(key, val)
+}
 
-	if self.send != nil {
+func (self *WebsocketClient) GetData(key string) interface{} {
+	return self.ctx.GetData(key)
+}
+
+func (self *WebsocketClient) IsDebug() bool {
+	return self.ctx.IsDebug()
+}
+
+func (self *WebsocketClient) IsAlive() bool {
+	return self.send != nil
+}
+
+func (self *WebsocketClient) start() {
+	if self.IsDebug() {
+		fmt.Println("[ws-start] ", self)
+	}
+
+	if self.proc.callbacks != nil && self.proc.callbacks.OnConnect != nil {
+		self.proc.callbacks.OnConnect(self)
+	}
+
+	// start reader
+	go func(cli *WebsocketClient) {
+		defer cli.stop()
+		for {
+			if _, msg, err := cli.conn.ReadMessage(); err != nil {
+				log.Println(err)
+				break
+			} else {
+				if self.IsDebug() {
+					fmt.Println("[ws-recv] ", msg)
+				}
+				if cli.proc.callbacks != nil && cli.proc.callbacks.OnMessage != nil {
+					cli.proc.callbacks.OnMessage(cli, msg)
+				}
+			}
+		}
+	}(self)
+
+	// start writer
+	go func(cli *WebsocketClient) {
+		defer cli.stop()
+		for {
+			select {
+			case message, ok := <-cli.send:
+				if !ok {
+					cli.conn.WriteMessage(websocket.CloseMessage, []byte{})
+					break
+				} else {
+					if cli.IsDebug() {
+						fmt.Println("[ws-send] ", message)
+					}
+					cli.conn.WriteMessage(websocket.TextMessage, []byte(message))
+				}
+			}
+		}
+	}(self)
+}
+
+func (self *WebsocketClient) stop() {
+	if self.IsAlive() {
+		if self.IsDebug() {
+			fmt.Println("[ws-stop]", self)
+		}
+
+		self.proc.removeClient(self)
+
 		if self.proc.callbacks != nil && self.proc.callbacks.OnClose != nil {
 			self.proc.callbacks.OnClose(self)
 		}
@@ -49,55 +118,15 @@ func (self *WebsocketClient) Close() {
 		close(self.send)
 		self.conn.Close()
 
-		// to mark client is already closed
+		// to mark client is gone
 		self.send = nil
-	}
-}
-
-func (self *WebsocketClient) PutData(key string, val interface{}) {
-	self.data[key] = val
-}
-
-func (self *WebsocketClient) GetData(key string) interface{} {
-	if v, ok := self.data[key]; ok {
-		return v
-	} else {
-		return nil
-	}
-}
-
-func loopWrite(cli *WebsocketClient) {
-	defer cli.Close()
-	for {
-		select {
-		case message, ok := <-cli.send:
-			if !ok {
-				cli.conn.WriteMessage(websocket.CloseMessage, []byte{})
-				return
-			} else {
-				log.Print("[ws-send] ", message)
-				cli.conn.WriteMessage(websocket.TextMessage, []byte(message))
-			}
-		}
-	}
-}
-
-func loopRead(cli *WebsocketClient) {
-	defer cli.Close()
-	for {
-		if _, msg, err := cli.conn.ReadMessage(); err != nil {
-			log.Print(err)
-			break
-		} else if cli.proc.callbacks != nil && cli.proc.callbacks.OnMessage != nil {
-			cli.proc.callbacks.OnMessage(cli, msg)
-		}
 	}
 }
 
 /*
  * websocket processor
  */
-type WSProcessor struct {
+type WebsocketProcessor struct {
 	DefaultProcessor
 	bufsize   int
 	callbacks *WebsocketCallback
@@ -105,38 +134,46 @@ type WSProcessor struct {
 	lock      sync.RWMutex
 }
 
-func (self *WSProcessor) remove(cli *WebsocketClient) {
+func (self *WebsocketProcessor) removeClient(cli *WebsocketClient) {
 	self.lock.Lock()
+	defer self.lock.Unlock()
+
 	if _, ok := self.clients[cli]; ok {
 		delete(self.clients, cli)
 	}
-	self.lock.Unlock()
 }
 
-func (self *WSProcessor) broadcast(msg []byte) {
-	self.lock.RLock()
-	for cli := range self.clients {
-		select {
-		case cli.send <- msg:
-		default:
-			cli.Close()
+func (self *WebsocketProcessor) broadcast(msg []byte) {
+	fails := make([]*WebsocketClient, 0)
+	{
+		self.lock.RLock()
+		defer self.lock.RUnlock()
+		for cli := range self.clients {
+			select {
+			case cli.send <- msg:
+			default: // fail sending msg to cli
+				fails = append(fails, cli)
+			}
 		}
 	}
-	self.lock.RUnlock()
+
+	if len(fails) > 0 {
+		// close failed clients
+		for _, c := range fails {
+			c.stop()
+		}
+	}
 }
 
-func (self *WSProcessor) Close() {
-	self.lock.Lock()
+func (self *WebsocketProcessor) Close() {
 	for c := range self.clients {
-		c.Close()
+		c.stop()
 		delete(self.clients, c)
 	}
-	self.lock.Unlock()
-
 	self.DefaultProcessor.Close()
 }
 
-func (self *WSProcessor) Process(ctx *NxContext) {
+func (self *WebsocketProcessor) Process(ctx *NxContext) {
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  self.bufsize,
 		WriteBufferSize: self.bufsize,
@@ -146,23 +183,18 @@ func (self *WSProcessor) Process(ctx *NxContext) {
 	}
 
 	if conn, err := upgrader.Upgrade(ctx.res, ctx.req, nil); err == nil {
-		c := &WebsocketClient{
+		cli := &WebsocketClient{
+			ctx:  ctx,
 			proc: self,
 			conn: conn,
 			send: make(chan []byte),
-			data: make(map[string]interface{}),
-		}
-		for _, x := range ctx.DataNames() {
-			c.data[x] = ctx.GetData(x)
-		}
-		if len(ctx.UrlParams()) > 0 {
-			c.data["url_params"] = ctx.UrlParams()[:]
 		}
 
 		self.lock.Lock()
-		self.clients[c] = true
+		self.clients[cli] = true
 		self.lock.Unlock()
-		c.start()
+
+		cli.start()
 		ctx.RunNext()
 	} else {
 		log.Print(err)
@@ -177,8 +209,8 @@ type WSEntry struct {
 func (self *WSEntry) SetCallback(c *WebsocketCallback) *WSEntry {
 	for p := self.Processor(); p != nil; p = p.getnext() {
 		switch p.(type) {
-		case *WSProcessor:
-			p.(*WSProcessor).callbacks = c
+		case *WebsocketProcessor:
+			p.(*WebsocketProcessor).callbacks = c
 		}
 	}
 	return self
@@ -190,11 +222,11 @@ func (self *NxHandler) Websocket(pattern string, ps ...NxProcessor) *WSEntry {
 		panic(fmt.Sprintf("pattern %q exists", pattern))
 	}
 
-	p := &WSProcessor{
+	p := &WebsocketProcessor{
 		DefaultProcessor: DefaultProcessor{
 			name: "websocket",
 		},
-		bufsize: 512,
+		bufsize: 256,
 		clients: make(map[*WebsocketClient]bool),
 		lock:    sync.RWMutex{},
 	}
@@ -204,13 +236,4 @@ func (self *NxHandler) Websocket(pattern string, ps ...NxProcessor) *WSEntry {
 	}
 	self.getmap[pattern] = en
 	return en
-}
-
-func (self *WebsocketClient) start() {
-	if self.proc.callbacks != nil && self.proc.callbacks.OnConnect != nil {
-		self.proc.callbacks.OnConnect(self)
-	}
-
-	go loopRead(self)
-	go loopWrite(self)
 }
