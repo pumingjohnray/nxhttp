@@ -106,6 +106,13 @@ func MakeProcessor(fs ...func(*NxContext)) NxProcessor {
  * builtin processors
  */
 
+func NewLoggingProc() NxProcessor {
+	return MakeProcessor(func(ctx *NxContext) {
+		log.Printf("[%s] %q", ctx.Req().Method, ctx.Req().URL.Path)
+		ctx.RunNext()
+	})
+}
+
 // database transaction begin/commit processor
 type DbTx struct {
 	DefaultProcessor
