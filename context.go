@@ -3,7 +3,6 @@ package nxhttp
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -63,13 +62,14 @@ func (self *NxContext) FormValueInt(name string, failsafe int) int {
 func (self *NxContext) FormValueBool(name string, failsafe bool) bool {
 	v := strings.ToLower(self.FormValue(name))
 	switch v {
-	case "yes", "y":
+	case "yes", "y", "true", "t", "1":
 		return true
-	case "no", "n":
+	case "no", "n", "false", "f", "0":
 		return false
+	case "":
+		return failsafe
 	default:
 		if b, e := strconv.ParseBool(v); e != nil {
-			log.Print(e)
 			return failsafe
 		} else {
 			return b

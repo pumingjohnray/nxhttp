@@ -52,6 +52,7 @@ func (self *DefaultProcessor) SetTimeout(i int) NxProcessor {
 	return self
 }
 
+// append next processor to tail
 func (self *DefaultProcessor) Then(p NxProcessor) NxProcessor {
 	if self.next != nil {
 		log.Panicf("aleady has next processor ", self, self.next)
