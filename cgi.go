@@ -122,6 +122,7 @@ func (self *CgiProcessor) Process(ctx *NxContext) {
 		isheader := true
 		status := 200
 		hdr := make([]byte, 0)
+		status_re := regexp.MustCompile(`^HTTP/.+(\d\d\d)`)
 
 		for stop := false; !stop; {
 			n, e := stdout.Read(buf)
@@ -132,41 +133,56 @@ func (self *CgiProcessor) Process(ctx *NxContext) {
 			if n > 0 {
 				if isheader {
 					if idx := eoh.FindIndex(buf); idx != nil {
+						//parse header
 						hdr = append(hdr, buf[:idx[0]]...)
 						isheader = false
 
-						for i, s := range strings.Split(string(hdr), "\n") {
-							// headers
+						for _, s := range strings.Split(string(hdr), "\n") {
 							if s[len(s)-1] == '\r' {
 								s = s[:len(s)-1]
 							}
+
 							p := strings.SplitN(s, ":", 2)
 							if len(p) > 1 {
 								name := strings.Trim(p[0], " ")
 								val := strings.Trim(p[1], " ")
-								if name == "Status" {
+								if strings.ToLower(name) == "status" {
 									if x, err := strconv.Atoi(val); err == nil {
 										status = x
 									}
 								} else {
 									w.Header().Set(name, val)
 								}
-							} else if i == 0 {
-								// extract status
-								r := regexp.MustCompile(`(\d\d\d)`)
-								if t := r.FindAllString(s, -1); len(t) > 0 {
-									x, _ := strconv.ParseInt(t[0], 10, 16)
+							} else {
+								// check http status, e.g.: HTTP/1.1 200 OK
+								if t := status_re.FindAllStringSubmatch(s, -1); len(t) > 0 {
+									x, _ := strconv.ParseInt(t[0][1], 10, 16)
 									status = int(x)
 								}
 							}
 						}
-						w.WriteHeader(status)
-						w.Write(buf[idx[1]:n])
+
+						if !ctx.IsStopped() {
+							// send header and body
+							w.WriteHeader(status)
+							if idx[1] < n-1 {
+								if _, e := w.Write(buf[idx[1]:n]); e != nil {
+									log.Println(e)
+									stop = true
+								}
+							}
+						}
 					} else {
 						hdr = append(hdr, buf[:n]...)
 					}
 				} else {
-					w.Write(buf[:n])
+					// send body to client
+					if !ctx.IsStopped() {
+						if _, e := w.Write(buf[:n]); e != nil {
+							log.Println(e)
+							stop = true
+						}
+					}
 				}
 			}
 		}

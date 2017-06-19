@@ -151,6 +151,10 @@ func (self *NxContext) End(status int) {
 	}
 }
 
+func (self *NxContext) IsStopped() bool {
+	return self.stopped
+}
+
 func (self *NxContext) Redirect(url string) {
 	if !self.stopped {
 		self.stopped = true
