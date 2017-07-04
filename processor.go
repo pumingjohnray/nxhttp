@@ -116,7 +116,8 @@ func NewLoggingProc() NxProcessor {
 
 func NoCacheProc() NxProcessor {
 	return MakeProcessor(func(ctx *NxContext) {
-		ctx.res.Header().Set("Cache-Control", "no-cache")
+		ctx.res.Header().Set("cache-control", "no-cache")
+		ctx.res.Header().Set("expires", "Thu, 01 Dec 1994 16:00:00 GMT")
 		ctx.RunNext()
 	})
 }
