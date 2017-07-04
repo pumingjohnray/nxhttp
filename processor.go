@@ -114,6 +114,13 @@ func NewLoggingProc() NxProcessor {
 	})
 }
 
+func NoCacheProc() NxProcessor {
+	return MakeProcessor(func(ctx *NxContext) {
+		ctx.res.Header().Set("Cache-Control", "no-cache")
+		ctx.RunNext()
+	})
+}
+
 // database transaction begin/commit processor
 type DbTx struct {
 	DefaultProcessor
