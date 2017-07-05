@@ -159,7 +159,7 @@ func (self *NxContext) Redirect(url string) {
 	if !self.stopped {
 		self.stopped = true
 		self.Res().Header().Set("cache-control", "no-cache")
-		self.Res().Header().Set("expires", "Thu, 01 Dec 1994 16:00:00 GMT")
+		self.Res().Header().Set("expires", "Thu, 01 Jan 1970 00:00:00 GMT")
 		http.Redirect(self.Res(), self.Req(), "/ui/signin", http.StatusMovedPermanently)
 	}
 }
