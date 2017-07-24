@@ -121,8 +121,11 @@ func (self NxHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			allow = append(allow, "PUT")
 		}
 		if len(allow) > 0 {
-			w.Header().Set("allow", strings.Join(allow, ","))
-			w.Header().Set("access-control-allow-origin", "*")
+			w.Header().Set("access-control-allow-methods", strings.Join(allow, ","))
+			// TODO: need to check Origin header value
+			w.Header().Set("access-control-allow-origin", r.Header.Get("origin"))
+			w.Header().Set("access-control-max-age", "180")
+			w.Header().Set("access-control-allow-headers", r.Header.Get("access-control-request-headers"))
 			w.WriteHeader(http.StatusOK)
 		} else {
 			w.WriteHeader(http.StatusNotImplemented)

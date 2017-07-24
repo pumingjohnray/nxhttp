@@ -147,7 +147,9 @@ func (self *NxContext) RunNext() {
 func (self *NxContext) End(status int) {
 	if !self.stopped {
 		self.stopped = true
-		self.res.WriteHeader(status)
+		if status > 0 {
+			self.res.WriteHeader(status)
+		}
 	}
 }
 
