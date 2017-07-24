@@ -105,9 +105,29 @@ func (self NxHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		en, args = find(self.delmap, r.URL.Path)
 	case "PUT":
 		en, args = find(self.putmap, r.URL.Path)
-	default:
-		en = nil
-		args = nil
+	case "OPTIONS":
+		// when do CORS ajax
+		allow := make([]string, 0)
+		if u, _ := find(self.getmap, r.URL.Path); u != nil {
+			allow = append(allow, "GET")
+		}
+		if u, _ := find(self.postmap, r.URL.Path); u != nil {
+			allow = append(allow, "POST")
+		}
+		if u, _ := find(self.delmap, r.URL.Path); u != nil {
+			allow = append(allow, "DELETE")
+		}
+		if u, _ := find(self.putmap, r.URL.Path); u != nil {
+			allow = append(allow, "PUT")
+		}
+		if len(allow) > 0 {
+			w.Header().Set("allow", strings.Join(allow, ","))
+			w.Header().Set("access-control-allow-origin", "*")
+			w.WriteHeader(http.StatusOK)
+		} else {
+			w.WriteHeader(http.StatusNotImplemented)
+		}
+		return
 	}
 
 	if en != nil {
