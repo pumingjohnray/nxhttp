@@ -135,6 +135,11 @@ func (self *NxContext) SendAsJson(o interface{}) *NxContext {
 	}
 }
 
+func (self *NxContext) SetStatus(status int) *NxContext {
+	self.res.WriteHeader(status)
+	return self
+}
+
 func (self *NxContext) RunNext() {
 	if self.cproc != nil && !self.stopped {
 		if p := self.cproc.getnext(); p != nil {
