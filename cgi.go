@@ -101,8 +101,8 @@ func (self *CgiProcessor) Process(ctx *NxContext) {
 
 		buf := make([]byte, 512)
 		for {
-			if n, e := r.Body.Read(buf); e != nil {
-				if n > 0 {
+			if n, e := r.Body.Read(buf); e != nil || buf == nil {
+				if n > 0 && buf != nil {
 					stdin.Write(buf[:n])
 				}
 				break
@@ -113,7 +113,7 @@ func (self *CgiProcessor) Process(ctx *NxContext) {
 	}()
 
 	// stdout piping routine
-	go func() {
+	go func(wr http.ResponseWriter) {
 		defer stdout.Close()
 
 		buf := make([]byte, 512)
@@ -130,7 +130,7 @@ func (self *CgiProcessor) Process(ctx *NxContext) {
 				stop = true
 			}
 
-			if n > 0 {
+			if n > 0 && !ctx.IsStopped() {
 				if isheader {
 					if idx := eoh.FindIndex(buf); idx != nil {
 						//parse header
@@ -151,7 +151,7 @@ func (self *CgiProcessor) Process(ctx *NxContext) {
 										status = x
 									}
 								} else {
-									w.Header().Set(name, val)
+									wr.Header().Set(name, val)
 								}
 							} else {
 								// check http status, e.g.: HTTP/1.1 200 OK
@@ -162,14 +162,12 @@ func (self *CgiProcessor) Process(ctx *NxContext) {
 							}
 						}
 
-						if !ctx.IsStopped() {
-							// send header and body
-							w.WriteHeader(status)
-							if idx[1] < n-1 {
-								if _, e := w.Write(buf[idx[1]:n]); e != nil {
-									log.Println(e)
-									stop = true
-								}
+						// send header and body
+						wr.WriteHeader(status)
+						if idx[1] < n-1 {
+							if _, e := wr.Write(buf[idx[1]:n]); e != nil {
+								log.Println(e)
+								stop = true
 							}
 						}
 					} else {
@@ -177,32 +175,35 @@ func (self *CgiProcessor) Process(ctx *NxContext) {
 					}
 				} else {
 					// send body to client
-					if !ctx.IsStopped() {
-						if _, e := w.Write(buf[:n]); e != nil {
-							log.Println(e)
-							stop = true
-						}
+					if _, e := wr.Write(buf[:n]); e != nil {
+						log.Println(e)
+						stop = true
 					}
 				}
 			}
 		}
-	}()
+	}(w)
 
 	// stderr piping routine
 	go func() {
 		defer stderr.Close()
 
 		buf := make([]byte, 512)
+		msg := ""
 		for {
 			n, e := stderr.Read(buf)
 			if e != nil {
 				if n > 0 {
-					log.Print(string(buf[:n]))
+					msg += string(buf[:n])
 				}
 				break
 			} else {
-				log.Print(string(buf[:n]))
+				msg += string(buf[:n])
 			}
+		}
+
+		if len(msg) > 0 {
+			log.Println(msg)
 		}
 	}()
 
